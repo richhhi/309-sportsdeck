@@ -1,0 +1,117 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+/* ===== SPORTSDECK DESIGN TOKENS ===== */
+
+:root {
+  /* Surfaces */
+  --sd-bg-primary: #0f1114;
+  --sd-bg-secondary: #1a1d23;
+  --sd-bg-tertiary: #22262e;
+  --sd-bg-elevated: #2a2f38;
+  --sd-bg-hover: #2e333d;
+
+  /* Borders */
+  --sd-border: rgba(255, 255, 255, 0.06);
+  --sd-border-strong: rgba(255, 255, 255, 0.12);
+  --sd-border-accent: rgba(0, 212, 170, 0.3);
+
+  /* Text */
+  --sd-text-primary: #e8eaed;
+  --sd-text-secondary: #9aa0a9;
+  --sd-text-tertiary: #6b7280;
+  --sd-text-inverse: #0f1114;
+
+  /* Accent — teal-green */
+  --sd-accent: #00d4aa;
+  --sd-accent-hover: #00b894;
+  --sd-accent-muted: rgba(0, 212, 170, 0.12);
+  --sd-accent-text: #00d4aa;
+
+  /* Live / Active — warm amber */
+  --sd-live: #f5a623;
+  --sd-live-muted: rgba(245, 166, 35, 0.12);
+
+  /* Danger — muted red */
+  --sd-danger: #e55050;
+  --sd-danger-hover: #d04040;
+  --sd-danger-muted: rgba(229, 80, 80, 0.12);
+
+  /* Success */
+  --sd-success: #34c759;
+  --sd-success-muted: rgba(52, 199, 89, 0.12);
+
+  /* Warning */
+  --sd-warning: #f5a623;
+  --sd-warning-muted: rgba(245, 166, 35, 0.12);
+
+  /* Spacing */
+  --sd-radius-sm: 6px;
+  --sd-radius-md: 8px;
+  --sd-radius-lg: 12px;
+  --sd-radius-xl: 16px;
+  --sd-radius-full: 9999px;
+
+  /* Shadows */
+  --sd-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --sd-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --sd-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+  /* Font */
+  --sd-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Transitions */
+  --sd-transition: 150ms ease;
+}
+
+/* ===== LIGHT THEME OVERRIDES ===== */
+
+:root.light-mode {
+  /* Surfaces */
+  --sd-bg-primary: #ffffff;
+  --sd-bg-secondary: #f8f9fa;
+  --sd-bg-tertiary: #f1f3f5;
+  --sd-bg-elevated: #e9ecef;
+  --sd-bg-hover: #dee2e6;
+
+  /* Borders */
+  --sd-border: rgba(0, 0, 0, 0.08);
+  --sd-border-strong: rgba(0, 0, 0, 0.15);
+  --sd-border-accent: rgba(0, 212, 170, 0.2);
+
+  /* Text */
+  --sd-text-primary: #1a1d23;
+  --sd-text-secondary: #495057;
+  --sd-text-tertiary: #adb5bd;
+  --sd-text-inverse: #ffffff;
+
+  /* Shadows */
+  --sd-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --sd-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --sd-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+
+@theme inline {
+  --color-background: var(--sd-bg-primary);
+  --color-foreground: var(--sd-text-primary);
+  --font-sans: var(--sd-font);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--sd-bg-primary);
+  color: var(--sd-text-primary);
+  font-family: var(--sd-font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Storybook dark background */
+.sb-show-main {
+  background: var(--sd-bg-primary) !important;
+}

@@ -1,0 +1,415 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "./generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------
+// ACCOUNTS & USERS
+// ---------------------------------------------------------
+
+model User {
+  id           String  @id @default(cuid())
+  email        String  @unique
+  passwordHash String? // Nullable for OAuth logins
+  authProvider String? // e.g., 'LOCAL', 'GOOGLE', 'GITHUB'
+  username     String  @unique
+  avatarUrl    String?
+  role         String  @default("USER") // 'USER', 'ADMIN'
+  isBanned     Boolean @default(false)
+
+  favoriteTeamId String?
+  favoriteTeam   Team?   @relation("UserFavoriteTeam", fields: [favoriteTeamId], references: [id])
+
+  followers Follows[] @relation("UserFollowers")
+  following Follows[] @relation("UserFollowing")
+
+  threads    Thread[]
+  posts      Post[]
+  polls      Poll[]
+  pollVotes  PollVote[]
+  reports    Report[]
+  banAppeals BanAppeal[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Explicit Follows table to store 'createdAt' for sorting follower lists
+model Follows {
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+}
+
+// ---------------------------------------------------------
+// MATCHES & LEAGUE DATA
+// ---------------------------------------------------------
+
+model Area {
+  id    Int     @id
+  name  String
+  code  String
+  flag  String?
+  teams Team[]
+}
+
+// Competitions returned by the football-data API. Teams can participate in
+// multiple competitions simultaneously (runningCompetitions in the API), so
+// this model is linked to `Team` via an implicit many-to-many relation.
+model Competition {
+  id         String  @id @default(cuid())
+  externalId Int     @unique
+  name       String
+  code       String?
+  type       String?
+  emblem     String?
+
+  teams Team[] @relation("TeamCompetitions")
+}
+
+model Team {
+  id          String    @id @default(cuid())
+  externalId  Int       @unique
+  areaId      Int
+  area        Area      @relation(fields: [areaId], references: [id])
+  name        String    @unique
+  shortName   String?
+  tla         String?
+  crest       String? // Logo URL
+  address     String?
+  website     String?
+  founded     Int?
+  clubColors  String?
+  venue       String?
+  lastUpdated DateTime?
+
+  // competitions the team is currently running in (runningCompetitions)
+  competitions Competition[] @relation("TeamCompetitions")
+
+  homeMatches Match[]        @relation("HomeTeam")
+  awayMatches Match[]        @relation("AwayTeam")
+  fans        User[]         @relation("UserFavoriteTeam")
+  threads     Thread[]       @relation("TeamThreads")
+  standings   TeamStanding[]
+  coach       Coach?
+  squad       Player[]
+  staff       Staff[]
+}
+
+model Coach {
+  id            String  @id @default(cuid())
+  externalId    Int     @unique
+  teamId        String  @unique
+  team          Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  firstName     String?
+  lastName      String?
+  name          String
+  dateOfBirth   String?
+  nationality   String?
+  contractStart String?
+  contractEnd   String?
+}
+
+// Generic staff members for a club (API returns `staff: StaffMember[]`).
+// Coaches are stored separately but the structures are identical, so we
+// duplicate most fields rather than trying to reuse the Coach model.
+model Staff {
+  id            String  @id @default(cuid())
+  externalId    Int     @unique
+  teamId        String
+  team          Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  firstName     String?
+  lastName      String?
+  name          String
+  dateOfBirth   String?
+  nationality   String?
+  contractStart String?
+  contractEnd   String?
+}
+
+model Player {
+  id          String  @id @default(cuid())
+  externalId  Int     @unique
+  teamId      String
+  team        Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  name        String
+  position    String?
+  dateOfBirth String?
+  nationality String?
+}
+
+model Season {
+  id              String   @id @default(cuid())
+  externalId      Int      @unique
+  startDate       DateTime
+  endDate         DateTime
+  currentMatchday Int
+  winner          String?
+
+  standings Standing[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Standing {
+  id       String @id @default(cuid())
+  seasonId String
+  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  stage String // e.g., "REGULAR_SEASON"
+  type  String // e.g., "TOTAL"
+  group String? // null for league tables
+
+  teamStandings TeamStanding[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([seasonId, stage, type, group])
+}
+
+model TeamStanding {
+  id     String @id @default(cuid())
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  standingId String
+  standing   Standing @relation(fields: [standingId], references: [id], onDelete: Cascade)
+
+  position       Int
+  matchesPlayed  Int     @default(0)
+  won            Int     @default(0)
+  drawn          Int     @default(0)
+  lost           Int     @default(0)
+  goalsFor       Int     @default(0)
+  goalsAgainst   Int     @default(0)
+  goalDifference Int     @default(0)
+  points         Int     @default(0)
+  form           String?
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([teamId, standingId])
+}
+
+model Matchday {
+  id         String   @id @default(cuid())
+  externalId Int?
+  name       String // e.g., "Matchday 1", "Semi-Finals"
+  startDate  DateTime
+  endDate    DateTime
+  matches    Match[]
+  updatedAt  DateTime @updatedAt
+}
+
+model Match {
+  id         String   @id @default(cuid())
+  externalId Int      @unique
+  matchdayId String
+  matchday   Matchday @relation(fields: [matchdayId], references: [id])
+
+  homeTeamId String
+  homeTeam   Team   @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeamId String
+  awayTeam   Team   @relation("AwayTeam", fields: [awayTeamId], references: [id])
+
+  utcDate     DateTime
+  venue       String?
+  status      String    @default("SCHEDULED") // 'SCHEDULED', 'LIVE', 'FINISHED'
+  stage       String?
+  group       String?
+  winner      String? // 'HOME_TEAM', 'AWAY_TEAM', 'DRAW', null
+  homeScore   Int?
+  awayScore   Int?
+  lastUpdated DateTime?
+
+  thread    Thread?  @relation("MatchThread") // The auto-created discussion thread
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------
+// FORUMS & DISCUSSIONS
+// ---------------------------------------------------------
+
+model Thread {
+  id      String @id @default(cuid())
+  title   String
+  content String // Main starting post of the thread
+
+  authorId String? // Nullable because auto-created match threads might be authored by 'System'
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  teamId String? // If null and matchId is null, it's the General forum
+  team   Team?   @relation("TeamThreads", fields: [teamId], references: [id])
+
+  matchId String? @unique
+  match   Match?  @relation("MatchThread", fields: [matchId], references: [id], onDelete: Cascade)
+
+  // AI Sentiment (Calculated collectively from comments)
+  sentimentTotal String? // 'POSITIVE', 'NEGATIVE', 'MIXED'
+  sentimentHome  String?
+  sentimentAway  String?
+
+  // Moderation
+  isHidden    Boolean @default(false)
+  isLocked    Boolean @default(false)
+  isAiFlagged Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tags     Tag[]
+  posts    Post[]
+  versions ThreadVersion[]
+  polls    Poll[]
+  reports  Report[]
+}
+
+// Stores previous versions of a Thread's main post
+model ThreadVersion {
+  id        String   @id @default(cuid())
+  threadId  String
+  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model Tag {
+  id      String   @id @default(cuid())
+  name    String   @unique
+  threads Thread[]
+}
+
+model Post {
+  id       String @id @default(cuid())
+  threadId String
+  thread   Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  content String
+
+  // Moderation
+  isHidden    Boolean @default(false)
+  isAiFlagged Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions PostVersion[]
+  reports  Report[]
+}
+
+// Stores previous versions of replies/comments
+model PostVersion {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model Poll {
+  id        String   @id @default(cuid())
+  threadId  String
+  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  
+  authorId  String?  // Nullable momentarily to allow migration of existing generic polls
+  author    User?    @relation(fields: [authorId], references: [id])
+
+  question  String
+  deadline  DateTime
+  createdAt DateTime @default(now())
+
+  options  PollOption[]
+  votes    PollVote[]
+  versions PollVersion[]
+}
+
+model PollVersion {
+  id        String   @id @default(cuid())
+  pollId    String
+  poll      Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  question  String
+  deadline  DateTime
+  options   String?  // Comma-separated or JSON snapshot of choices
+  createdAt DateTime @default(now())
+}
+
+model PollOption {
+  id     String     @id @default(cuid())
+  pollId String
+  poll   Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  text   String
+  votes  PollVote[]
+}
+
+model PollVote {
+  pollId       String
+  poll         Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pollOptionId String
+  pollOption   PollOption @relation(fields: [pollOptionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@id([pollId, userId]) // Ensures a user can only vote once per poll
+}
+
+// ---------------------------------------------------------
+// MODERATION & AI REPORTS
+// ---------------------------------------------------------
+
+model Report {
+  id         String @id @default(cuid())
+  reporterId String
+  reporter   User   @relation(fields: [reporterId], references: [id])
+  reason     String
+  status     String @default("PENDING") // 'PENDING', 'APPROVED', 'DISMISSED'
+
+  threadId String?
+  thread   Thread? @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  postId String?
+  post   Post?   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  // AI Moderation
+  aiToxicityScore Float?
+  aiVerdict       String? // e.g., "SAFE", "TOXIC", "SPAM"
+  aiExplanation   String?
+
+  createdAt DateTime @default(now())
+}
+
+model BanAppeal {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   String
+  status    String   @default("PENDING") // 'PENDING', 'APPROVED', 'REJECTED'
+  createdAt DateTime @default(now())
+}
+
+model DailyDigest {
+  id        String   @id @default(cuid())
+  date      DateTime @unique
+  content   String // The AI generated markdown/html summary
+  createdAt DateTime @default(now())
+}

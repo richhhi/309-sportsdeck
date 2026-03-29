@@ -1,0 +1,1452 @@
+openapi: 3.1.0
+info:
+  title: Sportsdeck API
+  version: 1.0.0
+  description: API documentation for Sportsdeck, including endpoints for authentication, users, matches, forums, polls, and moderation.
+servers:
+  - url: /api
+    description: Base API endpoint
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+security:
+  - bearerAuth: []
+paths:
+  /auth/register:
+    post:
+      summary: Register a new user
+      description: Create a new user account with email and password.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "user@example.com"
+                password:
+                  type: string
+                  minLength: 8
+                  example: "Password123"
+      responses:
+        '200':
+          description: User registered successfully
+          content:
+            application/json:
+              example:
+                message: "User registered"
+        '400':
+          description: Validation error
+        '500':
+          description: Registration failed
+
+  /auth/login:
+    post:
+      summary: Login to account
+      description: Verifies credentials and returns access and refresh JWTs.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "user@example.com"
+                password:
+                  type: string
+                  example: "Password123"
+      responses:
+        '200':
+          description: Successfully logged in
+          content:
+            application/json:
+              example:
+                accessToken: "eyJhbGciOiJIUzI1NiIsInR5c..."
+                refreshToken: "def502005e83c27..."
+        '400':
+          description: Missing fields
+        '401':
+          description: Invalid credentials
+        '500':
+          description: Login failed
+
+  /auth/refresh:
+    post:
+      summary: Refresh access token
+      description: Verifies refresh token and returns a new access token.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+                  example: "def502005e83c27..."
+      responses:
+        '200':
+          description: Successfully refreshed token
+          content:
+            application/json:
+              example:
+                accessToken: "eyJhbGciOiJIUzI1NiIsInR5c..."
+        '400':
+          description: Missing fields
+        '401':
+          description: Invalid credentials
+        '500':
+          description: Login failed
+
+  /auth/google:
+    get:
+      summary: Google OAuth redirect
+      description: Redirects the browser to Google's OAuth 2.0 consent screen. Sets a short-lived `oauth_state` cookie for CSRF protection.
+      security: []
+      responses:
+        '302':
+          description: Redirect to Google consent screen
+        '500':
+          description: Google OAuth is not configured on the server
+
+  /auth/google/callback:
+    get:
+      summary: Google OAuth callback
+      description: Handles the redirect from Google after consent. Exchanges the authorization code for tokens, creates or links the user account, issues JWT cookies, and redirects to the home page.
+      security: []
+      parameters:
+        - in: query
+          name: code
+          required: true
+          schema:
+            type: string
+          description: Authorization code from Google
+        - in: query
+          name: state
+          required: true
+          schema:
+            type: string
+          description: CSRF state token (must match the oauth_state cookie)
+      responses:
+        '302':
+          description: Redirect to home page on success, or to /login with error query param on failure
+
+  /users/{userId}:
+    get:
+      summary: Get user profile
+      description: Fetch public profile fields for a specific user.
+      security: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          example: "clq9s8r7k0000abc1def2ghi3"
+      responses:
+        '200':
+          description: Profile object
+          content:
+            application/json:
+              example:
+                id: "clq9s8r7k0000abc1def2ghi3"
+                username: "johndoe"
+                avatarUrl: "https://example.com/avatar.jpg"
+        '404':
+          description: User not found
+        '500':
+          description: Load failure
+
+  /users/{userId}/posts:
+    get:
+      summary: Get user threads and posts
+      description: Recent threads & posts by user.
+      security: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          example: "clq9s8r7k0000abc1def2ghi3"
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Threads and posts data
+          content:
+            application/json:
+              example:
+                threads:
+                  data: []
+                  pagination:
+                    page: 1
+                    limit: 20
+                    totalItems: 0
+                    totalPages: 1
+                posts:
+                  data: []
+                  pagination:
+                    page: 1
+                    limit: 20
+                    totalItems: 0
+                    totalPages: 1
+        '404':
+          description: User not found
+        '500':
+          description: Fetch failure
+
+  /users/{userId}/following:
+    get:
+      summary: Get users this user follows
+      description: Lists users the target follows. Anyone can view.
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          example: "clq9s8r7k0000abc1def2ghi3"
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of following users
+          content:
+            application/json:
+              example:
+                data: []
+                pagination:
+                  page: 1
+                  limit: 20
+                  totalItems: 0
+                  totalPages: 1
+        '404':
+          description: User not found
+        '500':
+          description: Fetch failure
+
+  /users/{userId}/followers:
+    get:
+      summary: Get followers
+      description: Lists followers of the target user.
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          example: "clq9s8r7k0000abc1def2ghi3"
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of followers
+          content:
+            application/json:
+              example:
+                data: []
+                pagination:
+                  page: 1
+                  limit: 20
+                  totalItems: 0
+                  totalPages: 1
+        '404':
+          description: User not found
+        '500':
+          description: Fetch failure
+
+    post:
+      summary: Follow user
+      description: Current authenticated user follows the specified {userId}.
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          example: "clq9s8r7k0000abc1def2ghi3"
+      responses:
+        '200':
+          description: Success message
+          content:
+            application/json:
+              example:
+                message: "Successfully followed user"
+        '400':
+          description: Invalid action (e.g. self-follow, already following)
+        '404':
+          description: Target not found
+        '500':
+          description: Follow failed
+
+    delete:
+      summary: Unfollow user
+      description: Current authenticated user unfollows the specified {userId}.
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          example: "clq9s8r7k0000abc1def2ghi3"
+      responses:
+        '200':
+          description: Success message
+          content:
+            application/json:
+              example:
+                message: "Successfully unfollowed user"
+        '400':
+          description: Not following target
+        '500':
+          description: Unfollow failed
+
+  /users/{userId}/activity:
+    get:
+      summary: Get user activity chart data
+      description: Returns array of { date, threadCount, postCount } for activity chart.
+      security: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          example: "clq9s8r7k0000abc1def2ghi3"
+      responses:
+        '200':
+          description: Activity data
+          content:
+            application/json:
+              example:
+                - date: "2026-03-01"
+                  threadCount: 2
+                  postCount: 5
+        '404':
+          description: User not found
+        '500':
+          description: Fetch failure
+
+  /users/{userId}/polls:
+    get:
+      summary: List polls created by user
+      description: List polls created by the user within their threads.
+      security: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          example: "clq9s8r7k0000abc1def2ghi3"
+      responses:
+        '200':
+          description: Formatted poll objects list
+          content:
+            application/json:
+              example:
+                - id: "pollId123"
+                  threadId: "threadId123"
+                  question: "Who will win?"
+                  deadline: "2026-04-01T00:00:00Z"
+                  totalVotes: 10
+                  options:
+                    - id: "opt1"
+                      text: "Team A"
+                      voteCount: 6
+        '404':
+          description: User not found
+        '500':
+          description: Fetch failure
+
+  /users/me:
+    get:
+      summary: Get own profile
+      description: Fetch own profile fields for the authenticated user.
+      responses:
+        '200':
+          description: Profile object
+          content:
+            application/json:
+              example:
+                id: "clq9s8r7k0000abc1def2ghi3"
+                username: "johndoe"
+                email: "user@example.com"
+        '404':
+          description: User not found
+        '500':
+          description: Load failure
+
+    patch:
+      summary: Update own profile
+      description: Update username or favoriteTeamId.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                favoriteTeamId:
+                  type: string
+            example:
+              username: "newjohndoe"
+              favoriteTeamId: "team123"
+      responses:
+        '200':
+          description: Updated user profile
+        '500':
+          description: Update failed
+
+  /users/me/avatar:
+    post:
+      summary: Upload profile picture
+      description: Upload and set a new profile picture. Expects multipart/form-data.
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Updated user profile with new avatarUrl
+        '400':
+          description: Validation error (e.g., file too large, not an image)
+        '401':
+          description: Unauthorized
+        '500':
+          description: Upload failed
+
+    delete:
+      summary: Remove profile picture
+      description: Remove the current profile picture and set avatarUrl to null.
+      responses:
+        '200':
+          description: Updated user profile with avatarUrl set to null
+        '401':
+          description: Unauthorized
+        '500':
+          description: Failed to remove avatar
+
+  /users/me/feed:
+    get:
+      summary: Get personalized feed
+      description: Returns a personalized, grouped activity feed of recent match updates, new threads from followed/favorite team, and grouped post replies.
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated feed data
+          content:
+            application/json:
+              example:
+                data: []
+                pagination:
+                  page: 1
+                  limit: 20
+                  totalItems: 100
+                  totalPages: 5
+        '401':
+          description: Unauthorized
+        '404':
+          description: User not found
+        '500':
+          description: Load failure
+
+  /users/me/followers/{followerId}:
+    delete:
+      summary: Remove a follower
+      description: Remove specific follower from your list.
+      parameters:
+        - in: path
+          name: followerId
+          required: true
+          schema:
+            type: string
+          example: "follower123"
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Invalid or not a follower
+        '404':
+          description: Follower not found
+        '500':
+          description: Removal failed
+
+  /digest:
+    get:
+      summary: Daily digest
+      description: Fetch AI-generated daily digest summarizing yesterday's matches, standings, and top discussions. If a digest for today does not exist, it will be generated automatically.
+      responses:
+        '200':
+          description: Daily digest object
+          content:
+            application/json:
+              example:
+                id: "digest123"
+                content: "Today's summary..."
+                date: "2026-03-06T00:00:00Z"
+        '401':
+          description: Unauthorized
+        '500':
+          description: Generator failure
+
+  /matches:
+    get:
+      summary: Get list of matches
+      description: Get list of matches with optional filtering and pagination.
+      security: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: matchdayId
+          schema:
+            type: string
+        - in: query
+          name: stage
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: orderBy
+          schema:
+            type: string
+            default: asc
+      responses:
+        '200':
+          description: Array of match objects
+          content:
+            application/json:
+              example:
+                - id: "match123"
+                  status: "FINISHED"
+                  homeTeam: { name: "Team A" }
+                  awayTeam: { name: "Team B" }
+        '500':
+          description: Fetch failed
+
+  /matches/{matchId}:
+    get:
+      summary: Get specific match
+      description: Get details for a specific match including teams, matchday, and associated thread.
+      security: []
+      parameters:
+        - in: path
+          name: matchId
+          required: true
+          schema:
+            type: string
+          example: "match123"
+      responses:
+        '200':
+          description: Match object
+        '404':
+          description: Match not found
+        '500':
+          description: Fetch failed
+
+  /matches/sync:
+    post:
+      summary: Sync matches
+      description: Manually trigger daily match and team syncs via cron job functions. Admin only.
+      responses:
+        '200':
+          description: Sync completed
+          content:
+            application/json:
+              example:
+                success: true
+                message: "Sync completed"
+        '500':
+          description: Sync failed
+
+  /standings:
+    get:
+      summary: Get standings
+      description: Get league tables/standings.
+      security: []
+      responses:
+        '200':
+          description: List of standings
+
+  /tags:
+    get:
+      summary: Get tags
+      description: Get a list of all tags currently in the database.
+      security: []
+      responses:
+        '200':
+          description: Array of tag objects
+          content:
+            application/json:
+              example:
+                - id: "tag1"
+                  name: "News"
+        '500':
+          description: Fetch failed
+
+  /threads:
+    get:
+      summary: Get threads
+      description: Browse and search for community discussion threads.
+      security: []
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: teamId
+          schema:
+            type: string
+        - in: query
+          name: authorId
+          schema:
+            type: string
+        - in: query
+          name: tags
+          schema:
+            type: string
+            description: Comma separated tags
+      responses:
+        '200':
+          description: Array of thread objects
+        '500':
+          description: Fetch failed
+
+    post:
+      summary: Create thread
+      description: Create a new discussion thread. The post is asynchronously scanned for toxicity via AI.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - content
+              properties:
+                title:
+                  type: string
+                content:
+                  type: string
+                teamId:
+                  type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+            example:
+              title: "What a match!"
+              content: "That was an incredible game."
+              tags: ["match", "discussion"]
+      responses:
+        '201':
+          description: Created thread object
+        '400':
+          description: Missing title or content
+        '401':
+          description: Unauthorized
+        '500':
+          description: Creation failed
+
+  /threads/{threadId}:
+    get:
+      summary: Get thread details
+      description: View a specific thread along with its main post and replies.
+      security: []
+      parameters:
+        - in: path
+          name: threadId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Thread object
+        '404':
+          description: Thread not found or hidden
+        '500':
+          description: Fetch failed
+
+    put:
+      summary: Update thread
+      description: Edit a thread's title and/or main content. A version history is saved on every update. Author or Admin only.
+      parameters:
+        - in: path
+          name: threadId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                content:
+                  type: string
+            example:
+              content: "Updated content..."
+      responses:
+        '200':
+          description: Updated thread object
+        '400':
+          description: Nothing to update
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (not author)
+        '404':
+          description: Thread not found or hidden
+        '500':
+          description: Update failed
+
+    delete:
+      summary: Delete thread
+      description: Soft-delete a thread. Author or Admin only.
+      parameters:
+        - in: path
+          name: threadId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              example:
+                success: true
+                message: "Thread deleted"
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Thread not found
+        '500':
+          description: Deletion failed
+
+  /threads/{threadId}/history:
+    get:
+      summary: Get thread history
+      description: View previous content versions of a thread's main post.
+      security: []
+      parameters:
+        - in: path
+          name: threadId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Array of thread version objects
+        '404':
+          description: Thread not found
+        '500':
+          description: Fetch failed
+
+  /threads/{threadId}/replies:
+    get:
+      summary: Get thread replies
+      description: Fetch replies associated with this specific thread.
+      security: []
+      parameters:
+        - in: path
+          name: threadId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Array of post reply objects
+        '500':
+          description: Fetch failed
+
+    post:
+      summary: Reply to thread
+      description: Post a reply to an active thread. The reply is asynchronously scanned for toxicity via AI.
+      parameters:
+        - in: path
+          name: threadId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+            example:
+              content: "I agree with this."
+      responses:
+        '201':
+          description: Created reply post object
+        '400':
+          description: Missing content
+        '401':
+          description: Unauthorized
+        '403':
+          description: Thread not found or is locked/hidden
+        '500':
+          description: Creation failed
+
+  /replies/{replyId}:
+    put:
+      summary: Update reply
+      description: Edit the content of a reply post. Auto-saves version history. Author/Admin only.
+      parameters:
+        - in: path
+          name: replyId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+            example:
+              content: "Updated reply..."
+      responses:
+        '200':
+          description: Updated reply post object
+        '400':
+          description: Missing content
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Reply not found
+        '500':
+          description: Update failed
+
+    delete:
+      summary: Delete reply
+      description: Soft-delete a reply post. Author or Admin only.
+      parameters:
+        - in: path
+          name: replyId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              example:
+                success: true
+                message: "Reply deleted"
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Reply not found
+        '500':
+          description: Deletion failed
+
+  /replies/{replyId}/history:
+    get:
+      summary: Get reply history
+      description: View previous content versions of a reply post.
+      security: []
+      parameters:
+        - in: path
+          name: replyId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Array of post version objects
+        '404':
+          description: Reply not found
+        '500':
+          description: Fetch failed
+
+  /threads/{threadId}/translation:
+    get:
+      summary: Translate a thread
+      description: Translate the main content of a specific thread into the target language using AI.
+      security: []
+      parameters:
+        - in: path
+          name: threadId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: lang
+          schema:
+            type: string
+            default: "English"
+      responses:
+        '200':
+          description: Translation successful
+          content:
+            application/json:
+              example:
+                translation: "Translated string"
+        '403':
+          description: Cannot translate hidden content
+        '404':
+          description: Thread not found
+        '500':
+          description: Translation failed
+
+  /replies/{replyId}/translation:
+    get:
+      summary: Translate a reply
+      description: Translate the content of a specific reply post into the target language using AI.
+      security: []
+      parameters:
+        - in: path
+          name: replyId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: lang
+          schema:
+            type: string
+            default: "English"
+      responses:
+        '200':
+          description: Translation successful
+          content:
+            application/json:
+              example:
+                translation: "Translated string"
+        '403':
+          description: Cannot translate hidden content
+        '404':
+          description: Reply not found
+        '500':
+          description: Translation failed
+
+  /threads/{threadId}/polls:
+    post:
+      summary: Create a poll
+      description: Create a poll within a thread. Author only.
+      parameters:
+        - in: path
+          name: threadId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - question
+                - options
+                - deadline
+              properties:
+                question:
+                  type: string
+                options:
+                  type: array
+                  items:
+                    type: string
+                deadline:
+                  type: string
+                  format: date-time
+            example:
+              question: "Who will win?"
+              options: ["Team A", "Team B"]
+              deadline: "2026-04-01T00:00:00Z"
+      responses:
+        '201':
+          description: Created poll object
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Thread not found
+        '500':
+          description: Creation failed
+
+  /polls/{pollId}/results:
+    get:
+      summary: Get poll results
+      description: View poll results and options. If user is logged in, their vote is included.
+      security: []
+      parameters:
+        - in: path
+          name: pollId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Poll results object
+          content:
+            application/json:
+              example:
+                pollId: "poll123"
+                question: "Who will win?"
+                results:
+                  - id: "opt1"
+                    text: "Team A"
+                    voteCount: 5
+                userVote: "opt1"
+        '404':
+          description: Poll not found
+        '500':
+          description: Fetch failed
+
+  /polls/{pollId}:
+    put:
+      summary: Update poll
+      description: Edit a poll's question or deadline. Saves a version history. Author only.
+      parameters:
+        - in: path
+          name: pollId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                question:
+                  type: string
+                deadline:
+                  type: string
+                  format: date-time
+            example:
+              question: "Updated question?"
+      responses:
+        '200':
+          description: Updated poll object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Poll not found
+        '500':
+          description: Update failed
+
+    delete:
+      summary: Delete poll
+      description: Delete a poll. Author or Admin only.
+      parameters:
+        - in: path
+          name: pollId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Poll not found
+        '500':
+          description: Deletion failed
+
+  /polls/{pollId}/votes:
+    post:
+      summary: Vote on a poll
+      description: Cast or change a vote in a poll.
+      parameters:
+        - in: path
+          name: pollId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - pollOptionId
+              properties:
+                pollOptionId:
+                  type: string
+            example:
+              pollOptionId: "opt123"
+      responses:
+        '200':
+          description: Vote cast successfully
+        '400':
+          description: Invalid option
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (voting ended, banned)
+        '404':
+          description: Poll not found
+        '500':
+          description: Voting failed
+
+  /reports:
+    post:
+      summary: Submit a report
+      description: Submit a new report about a thread or post.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - resourceId
+                - resourceType
+                - reason
+              properties:
+                resourceId:
+                  type: string
+                resourceType:
+                  type: string
+                  enum: [THREAD, POST]
+                reason:
+                  type: string
+            example:
+              resourceId: "thread123"
+              resourceType: "THREAD"
+              reason: "Inappropriate content"
+      responses:
+        '200':
+          description: Report submitted
+        '400':
+          description: Missing fields or invalid type
+        '401':
+          description: Unauthorized
+        '404':
+          description: Target resource not found
+        '500':
+          description: Submission failed
+
+    get:
+      summary: Get reports
+      description: Return paginated aggregated report buckets. Admin only.
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated reports
+          content:
+            application/json:
+              example:
+                data: []
+                pagination:
+                  page: 1
+                  limit: 20
+                  totalItems: 0
+                  totalPages: 1
+        '401':
+          description: Unauthorized
+        '500':
+          description: Fetch failed
+
+  /reports/{reportId}:
+    patch:
+      summary: Resolve a report
+      description: Process a specific report and simultaneously update all pending reports for the same post or thread. Admin only.
+      parameters:
+        - in: path
+          name: reportId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [APPROVED, DISMISSED]
+            example:
+              status: "APPROVED"
+      responses:
+        '200':
+          description: Reports processed
+        '400':
+          description: Invalid status or already processed
+        '401':
+          description: Unauthorized
+        '404':
+          description: Report not found
+        '500':
+          description: Processing failed
+
+  /users/{userId}/ban:
+    post:
+      summary: Ban user
+      description: Mark target user as banned. Admin only.
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User was banned successfully
+        '400':
+          description: User is already banned
+        '401':
+          description: Unauthorized
+        '404':
+          description: Target user not found
+        '500':
+          description: Ban action failed
+
+  /users/{userId}/unban:
+    post:
+      summary: Unban user
+      description: Clear ban flag on the target user. Admin only.
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User was unbanned successfully
+        '400':
+          description: User was not banned
+        '401':
+          description: Unauthorized
+        '404':
+          description: Target user not found
+        '500':
+          description: Unban action failed
+
+  /appeals:
+    post:
+      summary: Submit ban appeal
+      description: Create a new ban appeal. Banned users only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message
+              properties:
+                message:
+                  type: string
+            example:
+              message: "I didn't mean to break the rules."
+      responses:
+        '200':
+          description: Appeal submitted
+        '400':
+          description: Missing message, not banned, or existing pending
+        '401':
+          description: Unauthorized
+        '404':
+          description: User record not found
+        '500':
+          description: Appeal submission failed
+
+    get:
+      summary: Get ban appeals
+      description: Fetch paginated pending ban appeals. Admin only.
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of pending appeals
+        '401':
+          description: Unauthorized
+        '500':
+          description: Fetch failed
+
+  /moderation/flagged:
+    get:
+      summary: Get flagged content
+      description: Fetch paginated lists of threads and posts flagged by AI. Admin only.
+      parameters:
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [threads, posts, all]
+            default: all
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Flagged content
+          content:
+            application/json:
+              example:
+                threads:
+                  data: []
+                  pagination: { page: 1, limit: 50, totalItems: 0, totalPages: 1 }
+                posts:
+                  data: []
+                  pagination: { page: 1, limit: 50, totalItems: 0, totalPages: 1 }
+        '500':
+          description: Fetch failed
+
+  /appeals/{appealId}:
+    patch:
+      summary: Update appeal
+      description: Update the status of a specific ban appeal. Admin only.
+      parameters:
+        - in: path
+          name: appealId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [APPROVED, REJECTED]
+            example:
+              status: "APPROVED"
+      responses:
+        '200':
+          description: Status updated
+        '400':
+          description: Invalid status, already processed
+        '401':
+          description: Unauthorized
+        '404':
+          description: Appeal not found
+        '500':
+          description: Update failed
