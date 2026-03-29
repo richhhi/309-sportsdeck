@@ -1,25 +1,32 @@
 import { createClient, RedisClientType } from 'redis';
 
-// Use a global variable to preserve the client between HMR reloads in development
-const globalForRedis = global as unknown as { redisClient: RedisClientType };
-
-export const redis =
-  globalForRedis.redisClient ||
-  createClient({
-    url: process.env.REDIS_URL || 'redis://localhost:6379',
-  });
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForRedis.redisClient = redis;
+declare global {
+  // eslint-disable-next-line no-var
+  var redisClient: RedisClientType | undefined;
 }
 
-redis.on('error', (err) => console.error('Redis Client Error', err));
-redis.on('connect', () => console.log('Redis Client Connected'));
+function createRedisClient(): RedisClientType {
+  const url = process.env.REDIS_URL || 'redis://localhost:6379';
 
-// Ensure the client connects. In Next.js, it's safer to connect upon first use or initialize eagerly
-if (!redis.isOpen) {
-  redis.connect().catch(console.error);
+  // Redis Cloud uses rediss:// with a valid CA-signed cert — no extra TLS
+  // config needed, the client handles it automatically from the URL scheme.
+  const client = createClient({ url }) as RedisClientType;
+
+  // Register listeners once, inside the factory, so they don't stack on
+  // HMR reloads or multiple module evaluations.
+  client.on('error', (err) => console.error('Redis Client Error', err));
+  client.on('connect', () => console.log('Redis Client Connected'));
+
+  // Initiate the connection. The client queues commands internally until
+  // connected, so it's safe to call helper functions before this resolves.
+  client.connect().catch(console.error);
+
+  return client;
 }
+
+// Fix: assign unconditionally — singleton must be cached in both dev and prod.
+export const redis = globalThis.redisClient ?? createRedisClient();
+globalThis.redisClient = redis;
 
 /**
  * Retrieves cached data.
@@ -27,17 +34,21 @@ if (!redis.isOpen) {
 export async function getCachedData<T>(key: string): Promise<T | null> {
   try {
     const data = await redis.get(key);
-    return data ? JSON.parse(data) : null;
+    return data ? (JSON.parse(data) as T) : null;
   } catch (error) {
     console.error(`Redis get error for key ${key}:`, error);
-    return null; // Fallback to avoid breaking API
+    return null;
   }
 }
 
 /**
- * Stores data in the cache.
+ * Stores data in the cache with an optional TTL (default 60s).
  */
-export async function setCachedData(key: string, data: any, expirationInSeconds: number = 60) {
+export async function setCachedData<T>(
+  key: string,
+  data: T,
+  expirationInSeconds: number = 60,
+): Promise<void> {
   try {
     await redis.setEx(key, expirationInSeconds, JSON.stringify(data));
   } catch (error) {
@@ -46,19 +57,21 @@ export async function setCachedData(key: string, data: any, expirationInSeconds:
 }
 
 /**
- * Invalidates cache by using SCAN for a pattern.
+ * Invalidates all cache keys matching a pattern.
+ * Uses a single variadic UNLINK command instead of one per key.
  */
-export async function invalidateCachePattern(pattern: string) {
+export async function invalidateCachePattern(pattern: string): Promise<void> {
   try {
     const keysToDelete: string[] = [];
     for await (const keys of redis.scanIterator({ MATCH: pattern, COUNT: 100 })) {
       keysToDelete.push(...keys);
     }
     if (keysToDelete.length > 0) {
-      await Promise.all(keysToDelete.map(k => redis.unlink(k)));
-      console.log(`Invalidated ${keysToDelete.length} cache keys matching ${pattern}`);
+      // Single UNLINK call — avoids N round-trips to Redis
+      await redis.unlink(keysToDelete);
+      console.log(`Invalidated ${keysToDelete.length} cache keys matching "${pattern}"`);
     }
   } catch (error) {
-    console.error(`Redis invalidate pattern error for ${pattern}:`, error);
+    console.error(`Redis invalidate pattern error for "${pattern}":`, error);
   }
 }
