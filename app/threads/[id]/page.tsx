@@ -405,7 +405,7 @@ export default function ThreadViewPage() {
                     Report
                   </button>
                 )}
-                {isThreadAuthor && (
+                {(isThreadAuthor || user?.role === 'ADMIN') && (
                   <>
                     <button
                       onClick={handleDeleteThread}
@@ -537,7 +537,7 @@ export default function ThreadViewPage() {
                   isAiFlagged={post.isAiFlagged}
                   isEdited={post.versions?.length > 0}
                   isAuthor={isPostAuthor}
-                  onDelete={isPostAuthor ? () => handleDeletePost(post.id) : undefined}
+                  onDelete={(isPostAuthor || user?.role === 'ADMIN') ? () => handleDeletePost(post.id) : undefined}
                   onEdit={isPostAuthor ? (newContent) => handleEditPost(post.id, newContent) : undefined}
                   onReport={!isPostAuthor ? () => openReportModal('POST', post.id) : undefined}
                   onTranslateToggle={() => toggleTranslation(post.id, post.content)}

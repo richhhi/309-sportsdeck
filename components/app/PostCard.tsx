@@ -173,7 +173,7 @@ export function PostCard({
                 Edit
               </button>
             )}
-            {isAuthor && onDelete && (
+            {(isAuthor || user?.role === 'ADMIN') && onDelete && (
               <button
                 onClick={onDelete}
                 style={{ fontSize: '12px', background: 'none', border: 'none', color: 'var(--sd-danger)', cursor: 'pointer', fontFamily: 'var(--sd-font)' }}
